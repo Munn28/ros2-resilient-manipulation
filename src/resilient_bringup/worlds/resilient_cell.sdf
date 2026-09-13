@@ -2,6 +2,32 @@
 <sdf version="1.9">
 
   <world name="resilient_cell">
+    <!-- ========================================================= -->
+    <!-- GAZEBO SYSTEMS                                            -->
+    <!-- ========================================================= -->
+
+    <plugin
+      filename="gz-sim-physics-system"
+      name="gz::sim::systems::Physics">
+    </plugin>
+
+    <plugin
+      filename="gz-sim-user-commands-system"
+      name="gz::sim::systems::UserCommands">
+    </plugin>
+
+    <plugin
+      filename="gz-sim-scene-broadcaster-system"
+      name="gz::sim::systems::SceneBroadcaster">
+    </plugin>
+
+    <plugin
+      filename="gz-sim-sensors-system"
+      name="gz::sim::systems::Sensors">
+
+      <render_engine>ogre2</render_engine>
+
+    </plugin>
 
     <!-- ========================================================= -->
     <!-- WORLD SETTINGS                                            -->
@@ -340,6 +366,81 @@
           </material>
 
         </visual>
+
+      </link>
+
+    </model>
+    <!-- ========================================================= -->
+    <!-- OVERHEAD RGB-D CAMERA                                     -->
+    <!-- ========================================================= -->
+
+    <model name="overhead_rgbd_camera">
+
+      <static>true</static>
+
+      <!--
+          Camera is positioned approximately 0.9 m above
+          the table and points vertically downward.
+      -->
+
+      <pose>0.65 0.0 1.65 0 1.5708 0</pose>
+
+      <link name="camera_link">
+
+        <!-- Camera housing -->
+        <visual name="camera_body_visual">
+
+          <geometry>
+            <box>
+              <size>0.10 0.08 0.06</size>
+            </box>
+          </geometry>
+
+          <material>
+            <ambient>0.08 0.08 0.08 1</ambient>
+            <diffuse>0.12 0.12 0.12 1</diffuse>
+          </material>
+
+        </visual>
+
+
+        <!-- ===================================================== -->
+        <!-- RGB-D SENSOR                                          -->
+        <!-- ===================================================== -->
+
+        <sensor
+          name="rgbd_sensor"
+          type="rgbd_camera">
+
+          <always_on>true</always_on>
+
+          <update_rate>20</update_rate>
+
+          <visualize>true</visualize>
+
+          <topic>rgbd_camera</topic>
+
+          <camera>
+
+            <horizontal_fov>1.20</horizontal_fov>
+
+            <image>
+
+              <width>640</width>
+              <height>480</height>
+
+            </image>
+
+            <clip>
+
+              <near>0.10</near>
+              <far>4.0</far>
+
+            </clip>
+
+          </camera>
+
+        </sensor>
 
       </link>
 

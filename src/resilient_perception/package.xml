@@ -1,20 +1,18 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
-<exec_depend>resilient_perception</exec_depend>
-<exec_depend>ros_gz_bridge</exec_depend>
-<exec_depend>tf2_ros</exec_depend>
-<exec_depend>ur_simulation_gz</exec_depend>
-
 <package format="3">
-  <name>resilient_bringup</name>
+  <name>resilient_perception</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="munnsharawat1472@gmail.com">munns</maintainer>
-  <license>TODO: License declaration</license>
+  <license>MIT</license>
 
   <depend>rclpy</depend>
-  <depend>launch</depend>
-  <depend>launch_ros</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

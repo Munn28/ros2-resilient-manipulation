@@ -37,7 +37,7 @@ The resilience architecture is intended to remain robot-independent.
 
 ## Project Status
 
-Day 1 / 7 — Environment and simulation foundation.
+Day 2 / 7 — RGB-D perception and 3D object localization complete.
 
 ## Planned Fault Scenarios
 
@@ -49,6 +49,18 @@ Day 1 / 7 — Environment and simulation foundation.
 - path obstruction
 - trajectory execution timeout
 - sensor/communication heartbeat failure
+
+### Day 2 Milestone
+
+The current system can:
+
+- simulate a UR5e manipulation cell in Gazebo
+- acquire RGB and depth images from a simulated RGB-D camera
+- detect a target object using OpenCV HSV segmentation
+- estimate object depth from the RGB-D stream
+- reconstruct the object's 3D camera-frame position
+- transform the detected position into world coordinates using TF2
+- publish the detected object as both PoseStamped and TF frames
 
 ## Evaluation
 
