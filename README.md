@@ -78,3 +78,23 @@ The project will measure:
 ## License
 
 MIT
+
+### Day 4 Milestone
+
+The current system supports deterministic injection of:
+
+- object detection loss
+- stale perception
+- incorrect object localization
+- unreachable object targets
+- missed grasp
+- object drop
+- blocked motion path
+- communication heartbeat loss
+
+Fault injection is separated from the nominal perception and
+manipulation stack so the Day 3 autonomous pick-and-place remains
+available as a known-good baseline.
+
+Fault events are timestamped and recorded for later resilience
+evaluation.

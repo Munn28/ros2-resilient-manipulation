@@ -199,6 +199,27 @@ def generate_launch_description():
     )
 
     # =========================================================
+    # DAY 4 GRIPPER FAULT PROXY
+    # =========================================================
+
+    gripper_fault_proxy = Node(
+
+        package='resilient_faults',
+
+        executable='gripper_fault_proxy',
+
+        name='gripper_fault_proxy',
+
+        parameters=[
+            {
+                'use_sim_time': True
+            }
+        ],
+
+        output='screen',
+    )
+
+    # =========================================================
     # COMPLETE SYSTEM
     # =========================================================
 
@@ -215,6 +236,8 @@ def generate_launch_description():
         red_object_detector,
 
         object_pose_transformer,
-	
+
+        gripper_fault_proxy,
+
 	virtual_gripper,
     ])

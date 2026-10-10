@@ -42,7 +42,7 @@ public:
 
     gripper_publisher_ =
       this->create_publisher<std_msgs::msg::Bool>(
-        "/virtual_gripper/command",
+        "/faults/gripper_command_raw",
         10
       );
 
