@@ -107,9 +107,9 @@ def generate_launch_description():
         name='camera_static_tf',
 
         arguments=[
-            '--x', '0.65',
+            '--x', '0.42',
             '--y', '0.0',
-            '--z', '1.65',
+            '--z', '1.15',
 
             '--qx', '0.7071068',
             '--qy', '-0.7071068',

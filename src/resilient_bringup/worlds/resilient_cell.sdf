@@ -104,7 +104,7 @@
 
       <static>true</static>
 
-      <pose>0.65 0 0.375 0 0 0</pose>
+      <pose>0.45 0 0.20 0 0 0</pose>
 
       <link name="table_link">
 
@@ -112,7 +112,7 @@
 
           <geometry>
             <box>
-              <size>0.70 1.20 0.75</size>
+              <size>0.50 0.80 0.40</size>
             </box>
           </geometry>
 
@@ -122,7 +122,7 @@
 
           <geometry>
             <box>
-              <size>0.70 1.20 0.75</size>
+              <size>0.50 0.80 0.40</size>
             </box>
           </geometry>
 
@@ -146,14 +146,14 @@
 
       <static>true</static>
 
-      <pose>0.60 -0.32 0.765 0 0 0</pose>
+      <pose>0.42 -0.17 0.4125 0 0 0</pose>
 
       <link name="source_link">
 
         <collision name="source_collision">
           <geometry>
             <box>
-              <size>0.28 0.35 0.025</size>
+              <size>0.22 0.28 0.025</size>
             </box>
           </geometry>
         </collision>
@@ -161,7 +161,7 @@
         <visual name="source_visual">
           <geometry>
             <box>
-              <size>0.28 0.35 0.025</size>
+              <size>0.22 0.28 0.025</size>
             </box>
           </geometry>
 
@@ -185,7 +185,7 @@
 
       <static>true</static>
 
-      <pose>0.60 0.32 0.765 0 0 0</pose>
+      <pose>0.42 0.17 0.4125 0 0 0</pose>
 
       <link name="target_link">
 
@@ -193,7 +193,7 @@
 
           <geometry>
             <box>
-              <size>0.28 0.35 0.025</size>
+              <size>0.22 0.28 0.025</size>
             </box>
           </geometry>
 
@@ -203,7 +203,7 @@
 
           <geometry>
             <box>
-              <size>0.28 0.35 0.025</size>
+              <size>0.22 0.28 0.025</size>
             </box>
           </geometry>
 
@@ -227,7 +227,7 @@
 
       <static>false</static>
 
-      <pose>0.60 -0.32 0.815 0 0 0</pose>
+      <pose>0.42 -0.17 0.455 0 0 0</pose>
 
       <link name="object_link">
 
@@ -278,7 +278,7 @@
 
       <static>false</static>
 
-      <pose>0.53 -0.27 0.815 0 0 0</pose>
+      <pose>0.36 -0.11 0.455 0 0 0</pose>
 
       <link name="object_link">
 
@@ -329,7 +329,7 @@
 
       <static>false</static>
 
-      <pose>0.67 -0.25 0.815 0 0 0</pose>
+      <pose>0.48 -0.11 0.455 0 0 0</pose>
 
       <link name="object_link">
 
@@ -383,7 +383,7 @@
           the table and points vertically downward.
       -->
 
-      <pose>0.65 0.0 1.65 0 1.5708 0</pose>
+      <pose>0.42 0.0 1.15 0 1.5708 0</pose>
 
       <link name="camera_link">
 
