@@ -201,22 +201,122 @@ private:
       );
 
     if (
-      result ==
-      moveit::core::MoveItErrorCode::SUCCESS
+  result !=
+  moveit::core::MoveItErrorCode::SUCCESS
+)
+{
+  RCLCPP_ERROR(
+    this->get_logger(),
+    "Pre-grasp trajectory execution failed."
+  );
+
+  return;
+}
+
+
+RCLCPP_INFO(
+  this->get_logger(),
+  "PRE-GRASP SUCCESS."
+);
+
+
+// ========================================================
+// CONTROLLED APPROACH
+//
+// Perception gives us approximately the visible TOP of
+// the cube.
+//
+// We therefore stop 8 cm above the detected surface.
+// This keeps tool0 clear of the object while proving
+// that approach motion works.
+// ========================================================
+
+geometry_msgs::msg::Pose approach_pose =
+  target_pose;
+
+approach_pose.position.z =
+  object_z + 0.08;
+
+
+// Slower movement near the object.
+
+move_group_->setMaxVelocityScalingFactor(
+  0.08
+);
+
+move_group_->setMaxAccelerationScalingFactor(
+  0.08
+);
+
+
+// Remove previous pose target.
+
+move_group_->clearPoseTargets();
+
+move_group_->setPoseTarget(
+  approach_pose,
+  "tool0"
+);
+
+
+moveit::planning_interface::
+  MoveGroupInterface::Plan approach_plan;
+
+
+RCLCPP_INFO(
+  this->get_logger(),
+  "Planning controlled approach..."
+);
+
+
+const bool approach_planned =
+  static_cast<bool>(
+    move_group_->plan(
+      approach_plan
     )
-    {
-      RCLCPP_INFO(
-        this->get_logger(),
-        "PRE-GRASP SUCCESS."
-      );
-    }
-    else
-    {
-      RCLCPP_ERROR(
-        this->get_logger(),
-        "Trajectory execution failed."
-      );
-    }
+  );
+
+
+if (!approach_planned)
+{
+  RCLCPP_ERROR(
+    this->get_logger(),
+    "Approach planning failed."
+  );
+
+  return;
+}
+
+
+RCLCPP_INFO(
+  this->get_logger(),
+  "Approach trajectory found. Executing..."
+);
+
+
+const auto approach_result =
+  move_group_->execute(
+    approach_plan
+  );
+
+
+if (
+  approach_result ==
+  moveit::core::MoveItErrorCode::SUCCESS
+)
+{
+  RCLCPP_INFO(
+    this->get_logger(),
+    "APPROACH SUCCESS."
+  );
+}
+else
+{
+  RCLCPP_ERROR(
+    this->get_logger(),
+    "Approach execution failed."
+  );
+}
   }
 
 
