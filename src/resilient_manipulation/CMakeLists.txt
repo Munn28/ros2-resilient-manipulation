@@ -31,6 +31,10 @@ find_package(
 )
 
 find_package(
+  std_msgs REQUIRED
+)
+
+find_package(
   moveit_ros_planning_interface REQUIRED
 )
 
@@ -69,6 +73,7 @@ ament_target_dependencies(
 
   rclcpp
   geometry_msgs
+  std_msgs
   moveit_ros_planning_interface
 )
 
@@ -83,5 +88,9 @@ install(
   lib/${PROJECT_NAME}
 )
 
-
+install(
+  PROGRAMS
+  scripts/virtual_gripper
+  DESTINATION lib/${PROJECT_NAME}
+)
 ament_package()

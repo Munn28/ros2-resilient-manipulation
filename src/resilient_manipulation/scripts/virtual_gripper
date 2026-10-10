@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+
+import rclpy
+
+from rclpy.node import Node
+from rclpy.time import Time
+
+from std_msgs.msg import Bool
+
+from tf2_ros import Buffer
+from tf2_ros import TransformListener
+from tf2_ros import TransformException
+
+from ros_gz_interfaces.msg import Entity
+from ros_gz_interfaces.srv import SetEntityPose
+
+
+class VirtualGripper(Node):
+
+    def __init__(self):
+        super().__init__('virtual_gripper')
+
+        self.attached = False
+
+        # Distance from tool0 to the centre of the cube
+        # when the robot is at our approach position.
+        self.grasp_offset_z = 0.110
+
+        self.tf_buffer = Buffer()
+
+        self.tf_listener = TransformListener(
+            self.tf_buffer,
+            self
+        )
+
+        self.command_sub = self.create_subscription(
+            Bool,
+            '/virtual_gripper/command',
+            self.command_callback,
+            10
+        )
+
+        self.set_pose_client = self.create_client(
+            SetEntityPose,
+            '/world/resilient_cell/set_pose'
+        )
+
+        self.pending_request = None
+
+        # 20 Hz attachment update
+        self.timer = self.create_timer(
+            0.05,
+            self.update_cube
+        )
+
+        self.get_logger().info(
+            'Virtual gripper ready.'
+        )
+
+
+    def command_callback(self, msg):
+
+        self.attached = msg.data
+
+        if self.attached:
+            self.get_logger().info(
+                'VIRTUAL GRIPPER: ATTACHED'
+            )
+        else:
+            self.get_logger().info(
+                'VIRTUAL GRIPPER: RELEASED'
+            )
+
+
+    def update_cube(self):
+
+        if not self.attached:
+            return
+
+        if not self.set_pose_client.service_is_ready():
+            return
+
+        if (
+            self.pending_request is not None
+            and not self.pending_request.done()
+        ):
+            return
+
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                'world',
+                'tool0',
+                Time()
+            )
+
+        except TransformException:
+            return
+
+        request = SetEntityPose.Request()
+
+        request.entity.name = 'red_object'
+        request.entity.type = Entity.MODEL
+
+        # Keep the cube directly below tool0.
+        request.pose.position.x = (
+            transform.transform.translation.x
+        )
+
+        request.pose.position.y = (
+            transform.transform.translation.y
+        )
+
+        request.pose.position.z = (
+            transform.transform.translation.z
+            - self.grasp_offset_z
+        )
+
+        # Keep cube upright.
+        request.pose.orientation.x = 0.0
+        request.pose.orientation.y = 0.0
+        request.pose.orientation.z = 0.0
+        request.pose.orientation.w = 1.0
+
+        self.pending_request = (
+            self.set_pose_client.call_async(
+                request
+            )
+        )
+
+
+def main(args=None):
+
+    rclpy.init(args=args)
+
+    node = VirtualGripper()
+
+    try:
+        rclpy.spin(node)
+
+    except KeyboardInterrupt:
+        pass
+
+    node.destroy_node()
+
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

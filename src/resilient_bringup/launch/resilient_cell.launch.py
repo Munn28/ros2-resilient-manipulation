@@ -156,6 +156,49 @@ def generate_launch_description():
     )
 
     # =========================================================
+    # GAZEBO ENTITY POSE SERVICE
+    # Used by the virtual gripper.
+    # =========================================================
+
+    set_pose_bridge = Node(
+
+        package='ros_gz_bridge',
+
+        executable='parameter_bridge',
+
+        name='set_pose_bridge',
+
+        arguments=[
+            '/world/resilient_cell/set_pose'
+            '@ros_gz_interfaces/srv/SetEntityPose'
+        ],
+
+        output='screen',
+    )
+
+
+    # =========================================================
+    # SIMULATION VIRTUAL GRIPPER
+    # =========================================================
+
+    virtual_gripper = Node(
+
+        package='resilient_manipulation',
+
+        executable='virtual_gripper',
+
+        name='virtual_gripper',
+
+        parameters=[
+            {
+                'use_sim_time': True
+            }
+        ],
+
+        output='screen',
+    )
+
+    # =========================================================
     # COMPLETE SYSTEM
     # =========================================================
 
@@ -165,10 +208,13 @@ def generate_launch_description():
 
         rgbd_bridge,
 
+	set_pose_bridge,
+
         camera_static_tf,
 
         red_object_detector,
 
         object_pose_transformer,
-
+	
+	virtual_gripper,
     ])

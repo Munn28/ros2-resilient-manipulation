@@ -1,9 +1,14 @@
+#include <chrono>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <thread>
 
 #include <rclcpp/rclcpp.hpp>
 
+#include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <std_msgs/msg/bool.hpp>
 
 #include <moveit/move_group_interface/move_group_interface.hpp>
 
@@ -15,8 +20,13 @@ class VisionMotionExecutor : public rclcpp::Node
 {
 public:
 
-  explicit VisionMotionExecutor(const rclcpp::NodeOptions & options)
-  : Node("vision_motion_executor", options)
+  explicit VisionMotionExecutor(
+    const rclcpp::NodeOptions & options
+  )
+  : Node(
+      "vision_motion_executor",
+      options
+    )
   {
     target_subscription_ =
       this->create_subscription<
@@ -30,14 +40,20 @@ public:
         )
       );
 
+    gripper_publisher_ =
+      this->create_publisher<std_msgs::msg::Bool>(
+        "/virtual_gripper/command",
+        10
+      );
+
     RCLCPP_INFO(
       this->get_logger(),
-      "Vision motion executor started."
+      "Vision-guided manipulation executor started."
     );
 
     RCLCPP_INFO(
       this->get_logger(),
-      "Waiting for red-object pose..."
+      "Waiting for stable red-object pose..."
     );
   }
 
@@ -46,11 +62,10 @@ public:
   {
     move_group_ =
       std::make_shared<
-        moveit::planning_interface::
-          MoveGroupInterface>(
-            shared_from_this(),
-            "ur_manipulator"
-          );
+        moveit::planning_interface::MoveGroupInterface>(
+          shared_from_this(),
+          "ur_manipulator"
+        );
 
     move_group_->setPoseReferenceFrame(
       "base_link"
@@ -60,17 +75,16 @@ public:
       "tool0"
     );
 
-    // Keep initial autonomous motion conservative.
-    move_group_->setMaxVelocityScalingFactor(
-      0.15
-    );
-
-    move_group_->setMaxAccelerationScalingFactor(
-      0.15
-    );
-
     move_group_->setPlanningTime(
-      10.0
+      8.0
+    );
+
+    move_group_->setGoalPositionTolerance(
+      0.01
+    );
+
+    move_group_->setGoalOrientationTolerance(
+      0.05
     );
 
     RCLCPP_INFO(
@@ -82,35 +96,238 @@ public:
 
 private:
 
+  // ==========================================================
+  // PLAN + EXECUTE WITH RETRIES
+  // ==========================================================
+
+  bool move_to_pose(
+    const std::string & name,
+    const geometry_msgs::msg::Pose & pose,
+    double velocity,
+    double acceleration,
+    int max_attempts = 3
+  )
+  {
+    move_group_->setMaxVelocityScalingFactor(
+      velocity
+    );
+
+    move_group_->setMaxAccelerationScalingFactor(
+      acceleration
+    );
+
+    move_group_->clearPoseTargets();
+
+    move_group_->setPoseTarget(
+      pose,
+      "tool0"
+    );
+
+
+    for (
+      int attempt = 1;
+      attempt <= max_attempts;
+      ++attempt
+    )
+    {
+      RCLCPP_INFO(
+        this->get_logger(),
+        "%s: planning attempt %d/%d",
+        name.c_str(),
+        attempt,
+        max_attempts
+      );
+
+
+      moveit::planning_interface::
+        MoveGroupInterface::Plan plan;
+
+
+      const bool planned =
+        static_cast<bool>(
+          move_group_->plan(
+            plan
+          )
+        );
+
+
+      if (!planned)
+      {
+        RCLCPP_WARN(
+          this->get_logger(),
+          "%s: planning failed on attempt %d.",
+          name.c_str(),
+          attempt
+        );
+
+        std::this_thread::sleep_for(
+          std::chrono::milliseconds(300)
+        );
+
+        continue;
+      }
+
+
+      RCLCPP_INFO(
+        this->get_logger(),
+        "%s: trajectory found. Executing...",
+        name.c_str()
+      );
+
+
+      const auto result =
+        move_group_->execute(
+          plan
+        );
+
+
+      if (
+        result ==
+        moveit::core::MoveItErrorCode::SUCCESS
+      )
+      {
+        RCLCPP_INFO(
+          this->get_logger(),
+          "%s SUCCESS.",
+          name.c_str()
+        );
+
+        move_group_->clearPoseTargets();
+
+        return true;
+      }
+
+
+      RCLCPP_WARN(
+        this->get_logger(),
+        "%s: execution failed.",
+        name.c_str()
+      );
+
+
+      std::this_thread::sleep_for(
+        std::chrono::milliseconds(300)
+      );
+    }
+
+
+    RCLCPP_ERROR(
+      this->get_logger(),
+      "%s FAILED after %d attempts.",
+      name.c_str(),
+      max_attempts
+    );
+
+    move_group_->clearPoseTargets();
+
+    return false;
+  }
+
+
+  // ==========================================================
+  // VIRTUAL GRIPPER COMMAND
+  // ==========================================================
+
+  bool set_gripper(
+    bool attached
+  )
+  {
+    if (
+      gripper_publisher_->get_subscription_count()
+      == 0
+    )
+    {
+      RCLCPP_ERROR(
+        this->get_logger(),
+        "Virtual gripper node is not connected."
+      );
+
+      return false;
+    }
+
+
+    std_msgs::msg::Bool command;
+
+    command.data = attached;
+
+
+    // Publish several times for robustness.
+    for (
+      int i = 0;
+      i < 3;
+      ++i
+    )
+    {
+      gripper_publisher_->publish(
+        command
+      );
+
+      std::this_thread::sleep_for(
+        std::chrono::milliseconds(100)
+      );
+    }
+
+
+    if (attached)
+    {
+      RCLCPP_INFO(
+        this->get_logger(),
+        "GRIPPER ON."
+      );
+    }
+    else
+    {
+      RCLCPP_INFO(
+        this->get_logger(),
+        "GRIPPER OFF."
+      );
+    }
+
+
+    return true;
+  }
+
+
+  // ==========================================================
+  // PERCEPTION CALLBACK
+  // ==========================================================
+
   void target_callback(
-    const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+    const geometry_msgs::msg::PoseStamped::SharedPtr msg
+  )
   {
     std::lock_guard<std::mutex> lock(
       mutex_
     );
+
 
     if (!move_group_)
     {
       return;
     }
 
-    // Only perform this first test once.
+
     if (motion_started_)
     {
       return;
     }
 
-    // Average several perception samples before moving.
+
+    // Average 10 perception measurements.
     sum_x_ += msg->pose.position.x;
     sum_y_ += msg->pose.position.y;
     sum_z_ += msg->pose.position.z;
 
     sample_count_++;
 
-    if (sample_count_ < 10)
+
+    if (
+      sample_count_ < 10
+    )
     {
       return;
     }
+
 
     const double object_x =
       sum_x_ / sample_count_;
@@ -121,202 +338,335 @@ private:
     const double object_z =
       sum_z_ / sample_count_;
 
+
     motion_started_ = true;
+
 
     RCLCPP_INFO(
       this->get_logger(),
-      "Stable target detected: X=%.3f Y=%.3f Z=%.3f",
+      "Stable target: X=%.3f Y=%.3f Z=%.3f",
       object_x,
       object_y,
       object_z
     );
 
-    // --------------------------------------------------------
-    // PRE-GRASP
+
+    // ========================================================
+    // DOWNWARD GRASP ORIENTATION
     //
-    // We intentionally stop 20 cm above the cube.
-    // --------------------------------------------------------
+    // 180 degrees about X.
+    // tool0 +Z therefore points approximately downward
+    // toward the table.
+    // ========================================================
 
-    geometry_msgs::msg::Pose target_pose;
+    geometry_msgs::msg::Quaternion grasp_orientation;
 
-    target_pose.position.x =
-      object_x;
+    grasp_orientation.x = 1.0;
+    grasp_orientation.y = 0.0;
+    grasp_orientation.z = 0.0;
+    grasp_orientation.w = 0.0;
 
-    target_pose.position.y =
-      object_y;
 
-    target_pose.position.z =
-      object_z + 0.15;
+    // ========================================================
+    // ORIGINAL SAFE/HOME ORIENTATION
+    // ========================================================
 
-    // Use the robot's CURRENT tool orientation.
-    //
-    // This greatly reduces the chance of an unnecessary
-    // orientation-related IK failure during our first test.
+    geometry_msgs::msg::Quaternion home_orientation;
 
-    target_pose.orientation.x = -0.7071068;
-    target_pose.orientation.y = 0.0;
-    target_pose.orientation.z = 0.0;
-    target_pose.orientation.w = 0.7071068;
+    home_orientation.x = -0.7071068;
+    home_orientation.y = 0.0;
+    home_orientation.z = 0.0;
+    home_orientation.w = 0.7071068;
 
-    move_group_->setGoalPositionTolerance(0.01);
-    move_group_->setGoalOrientationTolerance(0.05);
-    move_group_->clearPoseTargets();
-    move_group_->setPoseTarget(target_pose,"tool0");
+    // ========================================================
+    // 1. PRE-GRASP
+    // ========================================================
 
-    moveit::planning_interface::
-      MoveGroupInterface::Plan plan;
+    geometry_msgs::msg::Pose pregrasp;
 
-    RCLCPP_INFO(
-      this->get_logger(),
-      "Planning safe pre-grasp motion..."
-    );
+    pregrasp.position.x = object_x;
+    pregrasp.position.y = object_y;
+    pregrasp.position.z = object_z + 0.15;
 
-    const bool planned =
-      static_cast<bool>(
-        move_group_->plan(plan)
-      );
+    pregrasp.orientation =
+      grasp_orientation;
 
-    if (!planned)
+
+    if (
+      !move_to_pose(
+        "PRE-GRASP",
+        pregrasp,
+        0.15,
+        0.15
+      )
+    )
     {
-      RCLCPP_ERROR(
-        this->get_logger(),
-        "MoveIt could not find a pre-grasp trajectory."
-      );
-
-      motion_started_ = false;
-
-      reset_samples();
+      fail_before_grasp();
 
       return;
     }
 
-    RCLCPP_INFO(
-      this->get_logger(),
-      "Trajectory found. Executing..."
-    );
 
-    const auto result =
-      move_group_->execute(
-        plan
-      );
+    // ========================================================
+    // 2. CONTROLLED APPROACH
+    // ========================================================
+
+    geometry_msgs::msg::Pose approach =
+      pregrasp;
+
+    approach.position.z =
+      object_z + 0.08;
+
 
     if (
-  result !=
-  moveit::core::MoveItErrorCode::SUCCESS
-)
-{
-  RCLCPP_ERROR(
-    this->get_logger(),
-    "Pre-grasp trajectory execution failed."
-  );
-
-  return;
-}
-
-
-RCLCPP_INFO(
-  this->get_logger(),
-  "PRE-GRASP SUCCESS."
-);
-
-
-// ========================================================
-// CONTROLLED APPROACH
-//
-// Perception gives us approximately the visible TOP of
-// the cube.
-//
-// We therefore stop 8 cm above the detected surface.
-// This keeps tool0 clear of the object while proving
-// that approach motion works.
-// ========================================================
-
-geometry_msgs::msg::Pose approach_pose =
-  target_pose;
-
-approach_pose.position.z =
-  object_z + 0.08;
-
-
-// Slower movement near the object.
-
-move_group_->setMaxVelocityScalingFactor(
-  0.08
-);
-
-move_group_->setMaxAccelerationScalingFactor(
-  0.08
-);
-
-
-// Remove previous pose target.
-
-move_group_->clearPoseTargets();
-
-move_group_->setPoseTarget(
-  approach_pose,
-  "tool0"
-);
-
-
-moveit::planning_interface::
-  MoveGroupInterface::Plan approach_plan;
-
-
-RCLCPP_INFO(
-  this->get_logger(),
-  "Planning controlled approach..."
-);
-
-
-const bool approach_planned =
-  static_cast<bool>(
-    move_group_->plan(
-      approach_plan
+      !move_to_pose(
+        "APPROACH",
+        approach,
+        0.08,
+        0.08
+      )
     )
-  );
+    {
+      fail_before_grasp();
+
+      return;
+    }
 
 
-if (!approach_planned)
-{
-  RCLCPP_ERROR(
-    this->get_logger(),
-    "Approach planning failed."
-  );
+    // ========================================================
+    // 3. VIRTUAL GRASP
+    // ========================================================
 
-  return;
-}
+    if (
+      !set_gripper(
+        true
+      )
+    )
+    {
+      RCLCPP_ERROR(
+        this->get_logger(),
+        "Task aborted: gripper unavailable."
+      );
 
-
-RCLCPP_INFO(
-  this->get_logger(),
-  "Approach trajectory found. Executing..."
-);
-
-
-const auto approach_result =
-  move_group_->execute(
-    approach_plan
-  );
+      return;
+    }
 
 
-if (
-  approach_result ==
-  moveit::core::MoveItErrorCode::SUCCESS
-)
-{
-  RCLCPP_INFO(
-    this->get_logger(),
-    "APPROACH SUCCESS."
-  );
-}
-else
-{
-  RCLCPP_ERROR(
-    this->get_logger(),
-    "Approach execution failed."
-  );
-}
+    std::this_thread::sleep_for(
+      std::chrono::milliseconds(700)
+    );
+
+
+    // ========================================================
+    // 4. LIFT
+    // ========================================================
+
+    geometry_msgs::msg::Pose lift =
+      approach;
+
+    lift.position.z =
+      object_z + 0.25;
+
+
+    if (
+      !move_to_pose(
+        "LIFT",
+        lift,
+        0.10,
+        0.10
+      )
+    )
+    {
+      RCLCPP_ERROR(
+        this->get_logger(),
+        "Lift failed. Keeping object attached."
+      );
+
+      return;
+    }
+
+
+    // ========================================================
+    // 5. TRANSFER ABOVE GREEN TARGET AREA
+    //
+    // Green target centre from resilient_cell.sdf:
+    // X = 0.42
+    // Y = +0.17
+    // ========================================================
+
+    geometry_msgs::msg::Pose transfer =
+      lift;
+
+    transfer.position.x = 0.42;
+    transfer.position.y = 0.17;
+
+
+    if (
+      !move_to_pose(
+        "TRANSFER",
+        transfer,
+        0.12,
+        0.12
+      )
+    )
+    {
+      RCLCPP_ERROR(
+        this->get_logger(),
+        "Transfer failed. Keeping object attached."
+      );
+
+      return;
+    }
+
+
+    // ========================================================
+    // 6. LOWER OBJECT TO TARGET AREA
+    // ========================================================
+
+    geometry_msgs::msg::Pose place =
+      transfer;
+
+    place.position.z =
+      object_z + 0.08;
+
+
+    if (
+      !move_to_pose(
+        "PLACE APPROACH",
+        place,
+        0.06,
+        0.06
+      )
+    )
+    {
+      RCLCPP_ERROR(
+        this->get_logger(),
+        "Placement approach failed."
+      );
+
+      return;
+    }
+
+
+    // ========================================================
+    // 7. RELEASE
+    // ========================================================
+
+    if (
+      !set_gripper(
+        false
+      )
+    )
+    {
+      RCLCPP_ERROR(
+        this->get_logger(),
+        "Failed to send release command."
+      );
+
+      return;
+    }
+
+
+    std::this_thread::sleep_for(
+      std::chrono::milliseconds(700)
+    );
+
+
+    RCLCPP_INFO(
+      this->get_logger(),
+      "OBJECT RELEASED IN TARGET AREA."
+    );
+
+
+    // ========================================================
+    // 8. RETREAT
+    // ========================================================
+
+    geometry_msgs::msg::Pose retreat =
+      place;
+
+    retreat.position.z =
+      object_z + 0.25;
+
+
+    if (
+      !move_to_pose(
+        "RETREAT",
+        retreat,
+        0.10,
+        0.10
+      )
+    )
+    {
+      return;
+    }
+
+
+    // ========================================================
+    // 9. RETURN TO KNOWN SAFE START POSE
+    //
+    // Measured from the initial UR5e simulation configuration.
+    // ========================================================
+
+    geometry_msgs::msg::Pose safe_home;
+
+    safe_home.position.x = 0.001;
+    safe_home.position.y = 0.233;
+    safe_home.position.z = 1.079;
+
+    safe_home.orientation =
+      home_orientation;
+
+
+    if (
+      !move_to_pose(
+        "RETURN HOME",
+        safe_home,
+        0.15,
+        0.15
+      )
+    )
+    {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Pick-and-place succeeded, but return-home failed."
+      );
+
+      return;
+    }
+
+
+    // ========================================================
+    // DAY 3 SUCCESS
+    // ========================================================
+
+    RCLCPP_INFO(
+      this->get_logger(),
+      "========================================"
+    );
+
+    RCLCPP_INFO(
+      this->get_logger(),
+      "AUTONOMOUS PICK-AND-PLACE COMPLETE"
+    );
+
+    RCLCPP_INFO(
+      this->get_logger(),
+      "========================================"
+    );
+  }
+
+
+  void fail_before_grasp()
+  {
+    RCLCPP_ERROR(
+      this->get_logger(),
+      "Task stopped before grasp."
+    );
+
+    motion_started_ = false;
+
+    reset_samples();
   }
 
 
@@ -331,13 +681,22 @@ else
 
 
   rclcpp::Subscription<
-    geometry_msgs::msg::PoseStamped>::SharedPtr
+    geometry_msgs::msg::PoseStamped
+  >::SharedPtr
     target_subscription_;
 
+
+  rclcpp::Publisher<
+    std_msgs::msg::Bool
+  >::SharedPtr
+    gripper_publisher_;
+
+
   std::shared_ptr<
-    moveit::planning_interface::
-      MoveGroupInterface>
+    moveit::planning_interface::MoveGroupInterface
+  >
     move_group_;
+
 
   std::mutex mutex_;
 
@@ -360,28 +719,43 @@ int main(
     argc,
     argv
   );
-rclcpp::NodeOptions node_options;
 
-node_options.parameter_overrides({
-rclcpp::Parameter("use_sim_time", true)
-});
+
+  rclcpp::NodeOptions node_options;
+
+  node_options.parameter_overrides(
+    {
+      rclcpp::Parameter(
+        "use_sim_time",
+        true
+      )
+    }
+  );
+
 
   auto node =
-    std::make_shared<VisionMotionExecutor>(node_options);
+    std::make_shared<
+      VisionMotionExecutor>(
+        node_options
+      );
+
 
   node->initialise_move_group();
 
+
   rclcpp::executors::
     MultiThreadedExecutor executor;
+
 
   executor.add_node(
     node
   );
 
+
   executor.spin();
+
 
   rclcpp::shutdown();
 
   return 0;
 }
-
